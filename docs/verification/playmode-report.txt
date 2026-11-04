@@ -1,0 +1,72 @@
+Twinline swing Play mode validation
+Unity 6000.6.2f1
+PASS: The game binds saved objects and restores the authored opening course.
+PASS: The authored scene contains no runtime-only TwinlineRoot.
+PASS: Exactly one persisted game camera is present.
+PASS: Eight saved anchors have assigned physics bodies and visual references.
+PASS: Ten saved gems have assigned visuals and trigger colliders.
+PASS: The persisted player includes its behaviour, visual and collider.
+PASS: The saved rope references a persistent material asset.
+PASS: Four imported WAV cues and the saved audio source are assigned.
+PASS: The scene uses imported SpriteRenderer assets for its player, anchors and gems.
+PASS: The saved scene has no missing component scripts.
+PASS: The browsable library includes at least twelve sprites and five prefab assets.
+PASS: The visual asset gallery is saved as a separate Unity scene.
+PASS: Exactly one native Canvas, HUD and EventSystem are present.
+PASS: The saved native HUD has assigned Text, Button, Image, CanvasGroup and font references.
+PASS: The native Start/Retry Button retains its persistent PressAction callback.
+PASS: Awake starts the saved scene in Ready state.
+PASS: Inspector-authored course, timing, camera, visual and audio settings survive initialization and retry.
+PASS: Native UI fonts, colors, images, button styling and authored RectTransforms survive Awake and retry without duplicate objects.
+ENVIRONMENT WARNING: UnityEditor QuickSearch startup index exception.
+ArgumentOutOfRangeException: Index was out of range. Must be non-negative and less than the size of the collection.
+Parameter name: index
+System.Collections.Generic.List`1[T].get_Item (System.Int32 index) (at <0e19fd8bd8e94908bba2ee4f803bc6a7>:0)
+UnityEditor.Search.SearchDatabase+<EnumerateAll>d__78.MoveNext () (at /Users/bokken/build/output/unity/unity/Modules/QuickSearch/Editor/Indexing/SearchDatabase.cs:351)
+System.Linq.Enumerable.TryGetFirst[TSource] (System.Collections.Generic.IEnumerable`1[T] source, System.Boolean& found) (at <1b6d7e99e5414d05b29c34e3609a3284>:0)
+System.Linq.Enumerable.First[TSource] (System.Collections.Generic.IEnumerable`1[T] source) (at <1b6d7e99e5414d05b29c34e3609a3284>:0)
+UnityEditor.Search.SearchDatabase.GetDefaultSearchDatabase () (at /Users/bokken/build/output/unity/unity/Modules/QuickSearch/Editor/Indexing/SearchDatabase.cs:325)
+UnityEditor.Search.SearchInit.IndexationOnStartup () (at /Users/bokken/build/output/unity/unity/Modules/QuickSearch/Editor/SearchInit.cs:109)
+UnityEditor.EditorApplication.Internal_CallDelayFunctions () (at /Users/bokken/build/output/unity/unity/Editor/Mono/EditorApplication.cs:428)
+UnityEngine.StackTraceUtility:ExtractStringFromExceptionInternal(Object, String&, String&) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:50)
+
+PASS: The persisted native Start button begins the real countdown.
+PASS: The countdown uses the Inspector's configured duration.
+PASS: The real fixed-update countdown enters Flying.
+PASS: Space attaches the saved player and shows the saved rope.
+PASS: The live physics joint respects configured rope limits.
+PASS: The saved joint remains active during physics simulation.
+PASS: LateUpdate renders the rope at the live player position.
+PASS: Holding Space charges the pump through the real Update loop.
+PASS: Releasing a charged hold pumps while keeping the rope attached.
+PASS: The charged pump changes live Rigidbody2D velocity.
+PASS: A quick second tap releases instead of pumping.
+PASS: The released joint is destroyed after the frame.
+PASS: An actual trigger overlap collects the saved gem.
+PASS: A repeated pickup callback cannot score the same gem twice.
+PASS: An actual boundary collision crashes the run.
+PASS: The persisted native Retry button restarts after a collision.
+PASS: Retry resets score, distance and attachment and restores all authored anchors and collectible gems.
+PASS: Inspector-authored course, timing, camera, visual and audio settings survive initialization and retry.
+PASS: Native UI fonts, colors, images, button styling and authored RectTransforms survive Awake and retry without duplicate objects.
+PASS: Play, pump, pickup, crash and retry create no duplicate world objects.
+PASS: Ready and swinging camera frame captures were written.
+PASS: The game binds saved objects and restores the authored opening course.
+PASS: The authored scene contains no runtime-only TwinlineRoot.
+PASS: Exactly one persisted game camera is present.
+PASS: Eight saved anchors have assigned physics bodies and visual references.
+PASS: Ten saved gems have assigned visuals and trigger colliders.
+PASS: The persisted player includes its behaviour, visual and collider.
+PASS: The saved rope references a persistent material asset.
+PASS: Four imported WAV cues and the saved audio source are assigned.
+PASS: Gameplay objects retain their prefab asset connections.
+PASS: The scene uses imported SpriteRenderer assets for its player, anchors and gems.
+PASS: The saved scene has no missing component scripts.
+PASS: The browsable library includes at least twelve sprites and five prefab assets.
+PASS: The visual asset gallery is saved as a separate Unity scene.
+PASS: Exactly one native Canvas, HUD and EventSystem are present.
+PASS: The saved native HUD has assigned Text, Button, Image, CanvasGroup and font references.
+PASS: The native Start/Retry Button retains its persistent PressAction callback.
+PASS: No unhandled gameplay errors or exceptions were logged.
+PASS: The saved scene and prefab references remain intact after exiting Play mode.
+RESULT: PASS

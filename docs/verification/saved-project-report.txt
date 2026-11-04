@@ -1,0 +1,33 @@
+Twinline saved-project validation
+Unity 6000.6.2f1
+PASS: The game binds saved objects and restores the authored opening course.
+PASS: The authored scene contains no runtime-only TwinlineRoot.
+PASS: Exactly one persisted game camera is present.
+PASS: Eight saved anchors have assigned physics bodies and visual references.
+PASS: Ten saved gems have assigned visuals and trigger colliders.
+PASS: The persisted player includes its behaviour, visual and collider.
+PASS: The saved rope references a persistent material asset.
+PASS: Four imported WAV cues and the saved audio source are assigned.
+PASS: Gameplay objects retain their prefab asset connections.
+PASS: The scene uses imported SpriteRenderer assets for its player, anchors and gems.
+PASS: The saved scene has no missing component scripts.
+PASS: The browsable library includes at least twelve sprites and five prefab assets.
+PASS: The visual asset gallery is saved as a separate Unity scene.
+PASS: Exactly one native Canvas, HUD and EventSystem are present.
+PASS: The saved native HUD has assigned Text, Button, Image, CanvasGroup and font references.
+PASS: The native Start/Retry Button retains its persistent PressAction callback.
+PASS: The upgraded project includes its saved native Canvas interface.
+PASS: Binding the saved world creates no duplicate objects.
+PASS: Inspector-authored course, timing, camera, visual and audio settings survive initialization and retry.
+PASS: Native UI fonts, colors, images, button styling and authored RectTransforms survive Awake and retry without duplicate objects.
+PASS: A non-default Inspector countdown duration drives the run.
+PASS: The saved player can attach to the saved course.
+PASS: Attachment creates a connected DistanceJoint2D within rope limits.
+PASS: Release removes the joint and hides the rope.
+PASS: A saved gem scores once and disables its collider and visual.
+PASS: Crash stops the saved player.
+PASS: Retry resets score, distance and attachment and restores all authored anchors and collectible gems.
+PASS: Attach, collection, crash and reset preserve the saved object count.
+PASS: Inspector-authored course, timing, camera, visual and audio settings survive initialization and retry.
+PASS: Native UI fonts, colors, images, button styling and authored RectTransforms survive Awake and retry without duplicate objects.
+RESULT: PASS

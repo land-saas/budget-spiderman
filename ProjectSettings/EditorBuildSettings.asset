@@ -8,5 +8,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Flight.unity
     guid: bc79031c604ce492bb278b4b074f24b8
+  - enabled: 0
+    path: Assets/Scenes/AssetLibrary.unity
+    guid: 46fe2ed04fda340e8829cad30958e922
   m_configObjects: {}
-  m_UseUCBPForAssetBundles: 0

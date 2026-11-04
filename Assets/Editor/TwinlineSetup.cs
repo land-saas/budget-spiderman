@@ -47,32 +47,13 @@ public static class TwinlineSetup
     [MenuItem("Twinline/Create Flight Scene")]
     public static void CreateScene()
     {
-        if(!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
-        var scene=EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
-        AddScript(new GameObject("TWINLINE — press Play"),"Assets/Scripts/TwinlineRoot.cs");
-        EditorSceneManager.SaveScene(scene,ScenePath);
-        EditorBuildSettings.scenes=new[]{new EditorBuildSettingsScene(ScenePath,true)};
-        EditorSceneManager.playModeStartScene=AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath);
-        PlayerSettings.productName="Twinline";
-        PlayerSettings.companyName="LocalPrototypes";
-        PlayerSettings.fullScreenMode=FullScreenMode.Windowed;
-        PlayerSettings.defaultIsNativeResolution=false;
-        PlayerSettings.defaultScreenWidth=1440;PlayerSettings.defaultScreenHeight=900;
-        PlayerSettings.resizableWindow=true;PlayerSettings.runInBackground=false;
-        PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Standalone,"com.local.twinline");
-        AssetDatabase.SaveAssets();
-        Debug.Log("TWINLINE_SCENE_READY: swing prototype with co-op flight available via Tab.");
+        if(Application.isBatchMode) TwinlineAuthoring.BuildProject();
+        else EditorApplication.ExecuteMenuItem("Twinline/Build Editable Project");
     }
+
     [MenuItem("Twinline/Reset Scene To Swing Prototype")]
-    public static void ResetSceneToSwing()
-    {
-        if(EditorApplication.isPlaying) return;
-        if(!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
-        var scene=EditorSceneManager.OpenScene(ScenePath,OpenSceneMode.Single);
-        ConfigureSwingRoot(FindPlayRoot());
-        EditorSceneManager.SaveScene(scene);
-        Debug.Log("TWINLINE_SCENE_RESET: ready for swing prototype.");
-    }
+    public static void ResetSceneToSwing() => CreateScene();
+
     private static Type LoadScriptType(string assetPath)
     {
         var script=AssetDatabase.LoadAssetAtPath<MonoScript>(assetPath);
@@ -84,36 +65,6 @@ public static class TwinlineSetup
         if(type==null) throw new Exception("Missing script: "+assetPath);
         return host.AddComponent(type);
     }
-    private static GameObject FindPlayRoot()
-    {
-        var root=GameObject.Find("TWINLINE — press Play");
-        if(root==null) root=FindObjectByScript("Assets/Scripts/TwinlineRoot.cs");
-        if(root==null) root=FindObjectByScript("Assets/Scripts/TwinSwingGame.cs");
-        if(root==null) root=FindObjectByScript("Assets/Scripts/TwinFlightGame.cs");
-        return root;
-    }
-    private static GameObject FindObjectByScript(string assetPath)
-    {
-        var type=LoadScriptType(assetPath);
-        if(type==null) return null;
-        var found=UnityEngine.Object.FindFirstObjectByType(type);
-        return found is Component component?component.gameObject:found as GameObject;
-    }
-    private static void ConfigureSwingRoot(GameObject root)
-    {
-        if(root==null) return;
-        var rootType=LoadScriptType("Assets/Scripts/TwinlineRoot.cs");
-        var swingType=LoadScriptType("Assets/Scripts/TwinSwingGame.cs");
-        var flightType=LoadScriptType("Assets/Scripts/TwinFlightGame.cs");
-        foreach(var component in root.GetComponents<MonoBehaviour>())
-        {
-            var type=component.GetType();
-            if(rootType!=null && type==rootType) continue;
-            if((swingType!=null && type==swingType) || (flightType!=null && type==flightType))
-                UnityEngine.Object.DestroyImmediate(component);
-        }
-        if(rootType!=null && root.GetComponent(rootType)==null) root.AddComponent(rootType);
-    }
     [MenuItem("Twinline/Validate Flight Mechanics")]
     public static void Validate()
     {
@@ -121,7 +72,8 @@ public static class TwinlineSetup
         var prior=Physics2D.simulationMode;
         try
         {
-            EditorSceneManager.OpenScene(ScenePath);
+            // Keep legacy cooperative physics isolated from the saved swing course.
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
             var game=UnityEngine.Object.FindFirstObjectByType<TwinFlightGame>();
             if(game==null)
             {

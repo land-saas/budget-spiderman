@@ -1,0 +1,11 @@
+Twinline editable starting-scene verification
+Unity 6000.6.2f1, macOS arm64
+
+Saved native scene/Canvas validation: PASS.
+Deliberate non-default font, tint, position, countdown, and cue-volume edits survive initialization and retry.
+Live Play validation: PASS (native Begin/Retry button, countdown, attach/pump/release, trigger pickup, collision, retry).
+No duplicate world or UI objects; persistent prefab and UI event references retained.
+macOS standalone build: SUCCESS.
+
+Tests/build used --burst-disable-compilation for the installed Unity native-linker executable-permission issue described in the previous report. No system files changed.
+Camera frame captures exclude screen-space-overlay UI; native UI is checked separately in the original Unity editor.

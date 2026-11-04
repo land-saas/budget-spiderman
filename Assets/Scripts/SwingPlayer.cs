@@ -13,6 +13,6 @@ public sealed class SwingPlayer : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        if(other.TryGetComponent(out TwinSwingGame.GemPickup gem)) game.CollectGem(gem);
+        if(other.TryGetComponent(out SwingGemPickup gem)) game.CollectGem(gem);
     }
 }
