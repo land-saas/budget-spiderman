@@ -89,11 +89,11 @@ public static class TwinlineProjectValidation
             current.StartRun(true);
             current.TryAttach();
             Ensure(current.Attached,"The saved player can attach to the saved course.",report);
-            var joint=current.player.GetComponent<DistanceJoint2D>();
-            Ensure(joint!=null && joint.connectedBody!=null && joint.distance>=current.minRopeLength && joint.distance<=current.maxRopeLength,
-                "Attachment creates a connected DistanceJoint2D within rope limits.",report);
+            var joint=current.player.GetComponent<SpringJoint2D>();
+            Ensure(joint!=null && joint.connectedBody==null && joint.distance>=current.minRopeLength && joint.distance<=current.maxRopeLength,
+                "Attachment creates a world-pinned SpringJoint2D within resting rope limits.",report);
             current.ReleaseSwing();
-            Ensure(!current.Attached && !current.rope.enabled && current.player.GetComponent<DistanceJoint2D>()==null,
+            Ensure(!current.Attached && !current.rope.enabled && current.player.GetComponent<SpringJoint2D>()==null,
                 "Release removes the joint and hides the rope.",report);
             var gem=current.sceneGems[0];
             current.CollectGem(gem);current.CollectGem(gem);
@@ -199,10 +199,10 @@ public static class TwinlineProjectValidation
                     game.player.position=game.sceneAnchors[0].body.position+new Vector2(0,-1.4f);
                     game.player.transform.position=game.player.position;game.player.linearVelocity=Vector2.zero;
                     Physics2D.SyncTransforms();
-                    game.SendMessage("HandleSpacePressed");game.SendMessage("HandleSpaceReleased");
-                    Check(game.Attached && game.rope.enabled,"Space attaches the saved player and shows the saved rope.");
-                    var joint=game.player.GetComponent<DistanceJoint2D>();
-                    Check(joint!=null && joint.connectedBody!=null && joint.distance>=game.minRopeLength && joint.distance<=game.maxRopeLength,
+                    game.SendMessage("HandleSpacePressed");
+                    Check(game.Attached && game.rope.enabled,"Pressing and holding Space attaches the saved player and shows the rope.");
+                    var joint=game.player.GetComponent<SpringJoint2D>();
+                    Check(joint!=null && joint.connectedBody==null && joint.distance>=game.minRopeLength && joint.distance<=game.maxRopeLength,
                         "The live physics joint respects configured rope limits.");
                     Advance(now);break;
                 case 3:
@@ -210,26 +210,45 @@ public static class TwinlineProjectValidation
                     Check(game.State==TwinSwingGame.Mode.Flying && game.Attached,"The saved joint remains active during physics simulation.");
                     Check(Vector3.Distance(game.rope.GetPosition(0),game.player.transform.position)<.3f,
                         "LateUpdate renders the rope at the live player position.");
+                    Check(Vector2.Distance(game.AnchorWorldPosition,game.sceneAnchors[0].body.position)<.0001f,
+                        "The attached anchor stays fixed through live physics.");
+                    Check(Physics2D.GetIgnoreCollision(game.player.GetComponent<Collider2D>(),game.sceneAnchors[0].GetComponent<Collider2D>()),
+                        "The player cannot collide with its own active anchor.");
                     CaptureFrame("swinging.png");
-                    game.SendMessage("HandleSpacePressed");
                     Advance(now);break;
                 case 4:
                     if(now-stageStarted<1f) break;
                     float charge=(float)typeof(TwinSwingGame).GetField("pumpCharge",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(game);
                     Check(game.Attached && charge>.4f,"Holding Space charges the pump through the real Update loop.");
+                    var spring=game.player.GetComponent<SpringJoint2D>();
+                    Check(Vector2.Distance(game.player.position,game.AnchorWorldPosition)>spring.distance+.015f,
+                        "The real held input adds a small controlled stretch beyond the resting length.");
+                    Check(game.sceneAnchors.Select((a,i)=>Vector2.Distance(a.body.position,anchorPositions[i])).All(d=>d<.0001f),
+                        "Every visible and upcoming anchor stays fixed in the actual Play mode run.");
+                    CaptureFrame("charged.png");
                     pumpVelocity=game.player.linearVelocity;
                     game.SendMessage("HandleSpaceReleased");
-                    Check(game.Attached,"Releasing a charged hold pumps while keeping the rope attached.");
+                    Check(!game.Attached && !game.rope.enabled,"Releasing the charged hold detaches and launches immediately.");
                     Advance(now);break;
                 case 5:
                     if(now-stageStarted<.08) break;
-                    Check(Vector2.Distance(pumpVelocity,game.player.linearVelocity)>.1f,"The charged pump changes live Rigidbody2D velocity.");
+                    Check(Vector2.Distance(pumpVelocity,game.player.linearVelocity)>.1f,"The detached charged launch changes live Rigidbody2D velocity.");
+                    Check(!game.Attached,"The released player stays detached over subsequent physics frames.");
+                    CaptureFrame("recoil.png");
                     game.SendMessage("HandleSpacePressed");game.SendMessage("HandleSpaceReleased");
-                    Check(!game.Attached && !game.rope.enabled,"A quick second tap releases instead of pumping.");
+                    Check(game.Attached,"A first quick tap attaches and stays latched.");
+                    game.SendMessage("HandleSpacePressed");game.SendMessage("HandleSpaceReleased");
+                    Check(!game.Attached && !game.rope.enabled,"A second quick press/release detaches the latched spring.");
+                    Check(!Physics2D.GetIgnoreCollision(game.player.GetComponent<Collider2D>(),game.sceneAnchors[0].GetComponent<Collider2D>()),
+                        "Detaching restores the previous player/anchor collision setting.");
+                    game.TryAttach();game.TryAttach();
+                    Check(game.player.GetComponents<SpringJoint2D>().Count(j=>j.enabled)==1,
+                        "Same-frame detach and repeated reattach leave exactly one enabled spring.");
+                    game.ReleaseSwing();
                     Advance(now);break;
                 case 6:
                     if(now-stageStarted<.08) break;
-                    Check(game.player.GetComponent<DistanceJoint2D>()==null,"The released joint is destroyed after the frame.");
+                    Check(game.player.GetComponent<SpringJoint2D>()==null,"The released joint is destroyed after the frame.");
                     game.StartRun(true);
                     var gem=game.sceneGems[0];gem.transform.position=Vector3.zero;
                     game.player.position=Vector2.zero;game.player.transform.position=Vector3.zero;game.player.linearVelocity=Vector2.zero;
@@ -405,7 +424,8 @@ public static class TwinlineProjectValidation
     }
     private static readonly string[] ConfigFields={
         "gravity","attachRange","scrollSpeed","corridorHalfHeight","anchorSpacing","gemSpacing","minRopeLength","maxRopeLength",
-        "swingBoost","chargeHoldDelay","pumpChargeTime","lowMomentumSpeed","minimumPumpImpulse","maximumPumpImpulse",
+        "ropeFrequency","ropeDamping","holdStretchAcceleration","maximumHoldStretch","releaseRecoilStrength","maximumReleaseRecoil","ropeSegments","ropeVisualSlack","ropeVisualGravity","ropeVisualDamping",
+        "swingBoost","maximumPlayerSpeed","chargeHoldDelay","pumpChargeTime","lowMomentumSpeed","minimumPumpImpulse","maximumPumpImpulse",
         "courseSeed","anchorHeightRange","gemHeightRange","openingSlowDuration","openingScrollMultiplier",
         "startCountdownDuration","retryDelay","cameraFollowSpeed","cameraMaximumLead","cameraLeadInset","anchorHighlightScale","chargeVisualGrowth",
         "attachVolume","releaseVolume","gemVolume","crashVolume","pumpVolume"

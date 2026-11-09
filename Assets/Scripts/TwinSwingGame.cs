@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>Rope-swing collectathon: Space attaches to the nearest anchor, Space again releases.</summary>
+/// <summary>Rope-swing collectathon: hold Space to attach and charge; release to detach and launch.</summary>
 public sealed class TwinSwingGame : MonoBehaviour
 {
     public enum Mode { Ready, Countdown, Flying, Crashed }
@@ -18,26 +18,49 @@ public sealed class TwinSwingGame : MonoBehaviour
     [Header("Swing physics")]
     public float gravity=9.4f;
     public float attachRange=7f;
-    public float scrollSpeed=2.1f;
+    [HideInInspector] public float scrollSpeed=2.1f; // Legacy serialized value; the course no longer scrolls.
     [Tooltip("Legacy generated-world half-height. In the saved scene, edit the camera Orthographic Size and boundary collider positions directly.")]
     public float corridorHalfHeight=4.9f;
     public float anchorSpacing=6.2f;
     public float gemSpacing=4.6f;
+    [Tooltip("Minimum resting rope length. The elastic spring may compress or stretch around it.")]
     public float minRopeLength=.75f;
+    [Tooltip("Maximum resting rope length at attachment, not a rigid extension limit.")]
     public float maxRopeLength=6.8f;
-    public float swingBoost=0.7f;
+    [HideInInspector] public float swingBoost=0.7f; // Legacy: catching never multiplies velocity.
+    [Tooltip("Safety cap for extreme repeated launches. Normal swing momentum is preserved.")]
+    [Min(1)] public float maximumPlayerSpeed=12f;
     public float chargeHoldDelay=.16f;
     public float pumpChargeTime=.75f;
     public float lowMomentumSpeed=3f;
-    public float minimumPumpImpulse=1.2f;
-    public float maximumPumpImpulse=4.8f;
+    public float minimumPumpImpulse=.4f;
+    public float maximumPumpImpulse=2.8f;
+    [Header("Elastic rope")]
+    [Tooltip("Spring frequency in Hz. Lower values give a softer, longer bounce.")]
+    [Range(.3f,8f)] public float ropeFrequency=2.2f;
+    [Tooltip("How quickly bouncing settles. Lower values preserve more recoil.")]
+    [Range(0f,1f)] public float ropeDamping=.3f;
+    [Tooltip("Outward acceleration at full charge. Holding stretches the spring; releasing lets it recoil.")]
+    [Min(0)] public float holdStretchAcceleration=20f;
+    [Tooltip("Maximum extension used by the hold force, as a fraction of the resting rope length.")]
+    [Range(.05f,1f)] public float maximumHoldStretch=.1f;
+    [Tooltip("Converts stored spring stretch into inward launch speed when releasing a charged hold.")]
+    [Range(0,1.5f)] public float releaseRecoilStrength=.25f;
+    [Min(0)] public float maximumReleaseRecoil=1.2f;
+    [Header("Rope appearance")]
+    [Range(4,64)] public int ropeSegments=24;
+    [Range(0f,.2f)] public float ropeVisualSlack=.005f;
+    [Min(0)] public float ropeVisualGravity=4f;
+    [HideInInspector] public float ropeVisualDamping=.97f; // Legacy strand setting.
+    public float ChargeAmount => pumpCharge;
+    public Vector2 AnchorWorldPosition => anchorWorldPosition;
     public const int Seed=4173;
     [Header("Course generation")]
     public int courseSeed=Seed;
     public Vector2 anchorHeightRange=new Vector2(-1.2f,3.8f);
     public Vector2 gemHeightRange=new Vector2(-2.8f,2.8f);
-    [Min(0)] public float openingSlowDuration=5f;
-    [Range(0,1)] public float openingScrollMultiplier=.5f;
+    [HideInInspector] public float openingSlowDuration=5f;
+    [HideInInspector] public float openingScrollMultiplier=.5f;
     [Header("Run timing")]
     [Min(0)] public float startCountdownDuration=1.5f;
     [Min(0)] public float retryDelay=.2f;
@@ -46,7 +69,7 @@ public sealed class TwinSwingGame : MonoBehaviour
     [Min(0)] public float cameraMaximumLead=2.8f;
     public float cameraLeadInset=2.2f;
     [Min(1)] public float anchorHighlightScale=1.35f;
-    [Range(0,2)] public float chargeVisualGrowth=.5f;
+    [Range(0,2)] public float chargeVisualGrowth=0f;
     [Header("Controls and editable interface")]
     public KeyCode actionKey=KeyCode.Space;
     public TwinlineHud hud;
@@ -88,8 +111,14 @@ public sealed class TwinSwingGame : MonoBehaviour
     private Vector3 playerVisualScale;
     private Vector3[] anchorRingScales;
     private readonly List<UnityEngine.Object> resources=new List<UnityEngine.Object>();
-    private DistanceJoint2D swingJoint;
+    private SpringJoint2D swingJoint;
+    private Vector2 anchorWorldPosition;
+    private Vector3[] ropePositions;
+    private readonly List<BoxCollider2D> boundaries=new List<BoxCollider2D>();
+    private readonly List<Vector3> initialBoundaryPositions=new List<Vector3>();
     private SwingAnchor activeAnchor;
+    private Collider2D attachedPlayerCollider,attachedAnchorCollider;
+    private bool previousAnchorCollisionIgnored;
     private Mesh disc;
     private Material ink;
     private System.Random rng;
@@ -139,7 +168,8 @@ public sealed class TwinSwingGame : MonoBehaviour
         {
             var border=new GameObject("Boundary "+sign);border.transform.SetParent(transform);
             border.transform.position=new Vector2(0,sign*(corridorHalfHeight+.5f));
-            border.AddComponent<BoxCollider2D>().size=new Vector2(400,1);
+            var collider=border.AddComponent<BoxCollider2D>();collider.size=new Vector2(400,1);
+            boundaries.Add(collider);initialBoundaryPositions.Add(border.transform.position);
         }
 
         for(int n=0;n<8;n++) anchors.Add(CreateAnchor(n));
@@ -176,6 +206,12 @@ public sealed class TwinSwingGame : MonoBehaviour
             gem.game=this;gems.Add(gem);
             initialGemPositions[i]=gem.transform.position;
         }
+        foreach(var root in gameObject.scene.GetRootGameObjects())
+            foreach(var collider in root.GetComponentsInChildren<BoxCollider2D>(true))
+                if(collider.name.Contains("Boundary") && collider.size.x>=100)
+                {
+                    boundaries.Add(collider);initialBoundaryPositions.Add(collider.transform.position);
+                }
         player.GetComponent<SwingPlayer>().game=this;
         initialPlayerPosition=player.position;
         playerVisualScale=playerVisual.localScale;
@@ -188,7 +224,7 @@ public sealed class TwinSwingGame : MonoBehaviour
         Best=PlayerPrefs.GetInt("TwinSwingBest",0);
         rng=new System.Random(courseSeed);
         countdown=crashAge=flash=shake=attachPulse=spaceHoldAge=pumpCharge=0;
-        spaceHolding=attachedThisPress=false;
+        spaceHolding=false;
         ReleaseSwing();
         player.simulated=true;
         player.transform.position=player.position=initialPlayerPosition;
@@ -203,6 +239,7 @@ public sealed class TwinSwingGame : MonoBehaviour
                 anchors[i].transform.position=anchors[i].body.position=initialAnchorPositions[i];
             for(int i=0;i<gems.Count;i++) gems[i].transform.position=initialGemPositions[i];
         }
+        for(int i=0;i<boundaries.Count;i++) boundaries[i].transform.position=initialBoundaryPositions[i];
         Physics2D.SyncTransforms();
     }
 
@@ -219,12 +256,7 @@ public sealed class TwinSwingGame : MonoBehaviour
     {
         if(Input.GetKeyDown(actionKey)) HandleSpacePressed();
         if(Input.GetKeyUp(actionKey)) HandleSpaceReleased();
-        if(State==Mode.Flying && Attached && spaceHolding && !attachedThisPress)
-        {
-            spaceHoldAge+=Time.deltaTime;
-            if(spaceHoldAge>=chargeHoldDelay)
-                pumpCharge=Mathf.MoveTowards(pumpCharge,1f,Time.deltaTime/Mathf.Max(.1f,pumpChargeTime));
-        }
+        UpdateHoldCharge(Time.deltaTime);
         if(State==Mode.Crashed) crashAge+=Time.unscaledDeltaTime;
         flash=Mathf.MoveTowards(flash,0,Time.unscaledDeltaTime*2.8f);
         shake=Mathf.MoveTowards(shake,0,Time.unscaledDeltaTime*1.6f);
@@ -233,6 +265,25 @@ public sealed class TwinSwingGame : MonoBehaviour
 
     private void FixedUpdate() => Step(Time.fixedDeltaTime);
 
+    private void UpdateHoldCharge(float dt)
+    {
+        if(State!=Mode.Flying || !Attached || !spaceHolding) return;
+        float previousAge=spaceHoldAge;
+        spaceHoldAge+=Mathf.Max(0,dt);
+        float chargingTime=Mathf.Max(0,spaceHoldAge-Mathf.Max(previousAge,chargeHoldDelay));
+        pumpCharge=Mathf.MoveTowards(pumpCharge,1f,chargingTime/Mathf.Max(.1f,pumpChargeTime));
+    }
+
+    private void CancelHeldAction()
+    {
+        spaceHolding=attachedThisPress=false;
+        spaceHoldAge=pumpCharge=0;
+    }
+
+    private void OnApplicationFocus(bool focused) { if(!focused) ReleaseSwing(); }
+    private void OnApplicationPause(bool paused) { if(paused) ReleaseSwing(); }
+    private void OnDisable() => ReleaseSwing();
+
     private void HandleSpacePressed()
     {
         if(State==Mode.Ready) StartRun();
@@ -240,24 +291,19 @@ public sealed class TwinSwingGame : MonoBehaviour
         else if(State==Mode.Flying)
         {
             spaceHolding=true;spaceHoldAge=pumpCharge=0;
-            if(!Attached)
-            {
-                TryAttach();
-                attachedThisPress=Attached;
-            }
-            else attachedThisPress=false;
+            attachedThisPress=!Attached;
+            if(!Attached) TryAttach();
         }
     }
 
     private void HandleSpaceReleased()
     {
-        if(State==Mode.Flying && spaceHolding && Attached && !attachedThisPress)
+        if(State==Mode.Flying && spaceHolding && Attached)
         {
-            if(pumpCharge>0) PumpSwing();
-            else ReleaseSwing();
+            if(pumpCharge>0) { PumpSwing();ReleaseSwing(); }
+            else if(!attachedThisPress) ReleaseSwing();
         }
-        spaceHolding=attachedThisPress=false;
-        spaceHoldAge=0;
+        CancelHeldAction();
     }
 
     public void ToggleSwing()
@@ -268,6 +314,7 @@ public sealed class TwinSwingGame : MonoBehaviour
 
     public void TryAttach()
     {
+        if(Attached || State!=Mode.Flying) return;
         SwingAnchor nearest=null;
         float nearestDistance=attachRange;
         foreach(var anchor in anchors)
@@ -277,49 +324,56 @@ public sealed class TwinSwingGame : MonoBehaviour
         }
         if(nearest==null) return;
         activeAnchor=nearest;
+        anchorWorldPosition=nearest.body.position;
+        // Cancel any queued scrolling motion before pinning this pivot in world space.
+        nearest.body.position=anchorWorldPosition;
+        nearest.body.linearVelocity=Vector2.zero;
+        nearest.body.angularVelocity=0;
         attachRopeLength=Mathf.Clamp(nearestDistance,minRopeLength,maxRopeLength);
-        ApplyAttachMomentum(nearest);
-        swingJoint=player.gameObject.AddComponent<DistanceJoint2D>();
-        swingJoint.connectedBody=nearest.body;
+        // Catching preserves velocity; only a deliberate charged release adds energy.
+        player.linearVelocity=Vector2.ClampMagnitude(player.linearVelocity,Mathf.Max(1,maximumPlayerSpeed));
+        swingJoint=player.gameObject.AddComponent<SpringJoint2D>();
+        swingJoint.connectedBody=null;
         swingJoint.autoConfigureConnectedAnchor=false;
         swingJoint.autoConfigureDistance=false;
         swingJoint.anchor=Vector2.zero;
-        swingJoint.connectedAnchor=Vector2.zero;
+        swingJoint.connectedAnchor=anchorWorldPosition;
         swingJoint.distance=attachRopeLength;
-        swingJoint.maxDistanceOnly=false;
+        swingJoint.frequency=Mathf.Max(.3f,ropeFrequency);
+        swingJoint.dampingRatio=Mathf.Clamp01(ropeDamping);
         swingJoint.enableCollision=false;
         swingJoint.breakForce=Mathf.Infinity;
+        // A world-connected joint cannot automatically suppress player/pivot collisions.
+        attachedPlayerCollider=player.GetComponent<Collider2D>();
+        attachedAnchorCollider=nearest.GetComponent<Collider2D>();
+        if(attachedPlayerCollider!=null && attachedAnchorCollider!=null)
+        {
+            previousAnchorCollisionIgnored=Physics2D.GetIgnoreCollision(attachedPlayerCollider,attachedAnchorCollider);
+            Physics2D.IgnoreCollision(attachedPlayerCollider,attachedAnchorCollider,true);
+        }
         rope.enabled=true;
+        ResetRopeVisual();
         attachPulse=.35f;
         Play(attachSound,attachVolume);
     }
 
-    private void ApplyAttachMomentum(SwingAnchor anchor)
-    {
-        Vector2 offset=player.position-(Vector2)anchor.body.position;
-        if(offset.sqrMagnitude<.0001f) return;
-        Vector2 radial=offset.normalized;
-        Vector2 velocity=player.linearVelocity;
-        float radialSpeed=Vector2.Dot(velocity,radial);
-        Vector2 tangent=velocity-radial*radialSpeed;
-        float speed=velocity.magnitude;
-        float speedBoost=1f+Mathf.Clamp(speed/6.5f,0f,swingBoost);
-        float sideEntry=1f-Mathf.Clamp01(Mathf.Abs(Vector2.Dot(speed>.01f?velocity/speed:Vector2.zero,radial)));
-        player.linearVelocity=tangent*speedBoost*(1f+sideEntry*.35f);
-    }
-
     public void ReleaseSwing()
     {
+        if(attachedPlayerCollider!=null && attachedAnchorCollider!=null)
+            Physics2D.IgnoreCollision(attachedPlayerCollider,attachedAnchorCollider,previousAnchorCollisionIgnored);
+        attachedPlayerCollider=attachedAnchorCollider=null;
         activeAnchor=null;
-        pumpCharge=0;
+        CancelHeldAction();
+        ropePositions=null;
         if(swingJoint!=null)
         {
+            swingJoint.enabled=false;
             if(Application.isPlaying) Destroy(swingJoint);
             else DestroyImmediate(swingJoint);
             swingJoint=null;
             Play(releaseSound,releaseVolume);
         }
-        rope.enabled=false;
+        if(rope!=null) rope.enabled=false;
     }
 
     public void CollectGem(SwingGemPickup gem)
@@ -337,7 +391,7 @@ public sealed class TwinSwingGame : MonoBehaviour
     {
         if(State!=Mode.Flying) return;
         State=Mode.Crashed;crashAge=0;
-        spaceHolding=attachedThisPress=false;spaceHoldAge=pumpCharge=0;
+        spaceHolding=false;spaceHoldAge=pumpCharge=0;
         ReleaseSwing();
         player.simulated=false;
         Best=Mathf.Max(Best,Score);
@@ -359,36 +413,55 @@ public sealed class TwinSwingGame : MonoBehaviour
             if(countdown<=0)
             {
                 State=Mode.Flying;player.simulated=true;
+                // A real key held through the countdown can catch the opening anchor immediately.
+                if(Input.GetKey(actionKey)) { spaceHolding=true;attachedThisPress=true;TryAttach(); }
             }
             return;
         }
         if(State!=Mode.Flying) return;
+        if(spaceHolding && !Attached) TryAttach();
+        player.linearVelocity=Vector2.ClampMagnitude(player.linearVelocity,Mathf.Max(1,maximumPlayerSpeed));
         runTime+=dt;
 
-        float scroll=scrollSpeed*(runTime<openingSlowDuration?openingScrollMultiplier:1f)*dt;
-        DistanceTravelled+=scroll;
+        // A fixed world: only the player and camera travel. Progress measures actual travel,
+        // not a timer that drags anchor points and pickups past a stationary player.
+        DistanceTravelled=Mathf.Max(DistanceTravelled,player.position.x-initialPlayerPosition.x);
         foreach(var anchor in anchors)
         {
-            // Keep the current pivot stable while the rest of the endless course
-            // advances past it.
-            if(anchor!=activeAnchor)
-                anchor.body.MovePosition(anchor.body.position+Vector2.left*scroll);
+            anchor.body.linearVelocity=Vector2.zero;
+            anchor.body.angularVelocity=0;
         }
-        foreach(var gem in gems)
+        if(activeAnchor!=null) activeAnchor.body.position=anchorWorldPosition;
+        foreach(var boundary in boundaries)
         {
-            if(gem.collected) continue;
-            gem.transform.position=gem.transform.position+Vector3.left*scroll;
+            Vector3 position=boundary.transform.position;position.x=player.position.x;
+            boundary.transform.position=position;
         }
+        UpdateSpring();
         RecycleAnchors();
         RecycleGems();
-        if(!Attached && player.position.x<sharedCamera.transform.position.x-9f) Crash("Fell behind");
 
+    }
+
+    private void UpdateSpring()
+    {
+        if(!Attached) return;
+        swingJoint.frequency=Mathf.Max(.3f,ropeFrequency);
+        swingJoint.dampingRatio=Mathf.Clamp01(ropeDamping);
+        if(!spaceHolding || pumpCharge<=0) return;
+        Vector2 radial=player.position-anchorWorldPosition;
+        float length=radial.magnitude;
+        if(length<.001f) return;
+        float extension=Mathf.Max(0,length-swingJoint.distance);
+        float limit=Mathf.Max(.05f,swingJoint.distance*Mathf.Clamp(maximumHoldStretch,.05f,1f));
+        float taper=1-Mathf.Clamp01(extension/limit);
+        player.AddForce(radial/length*(Mathf.Max(0,holdStretchAcceleration)*pumpCharge*taper*player.mass));
     }
 
     private void PumpSwing()
     {
         if(!Attached || activeAnchor==null) return;
-        Vector2 radial=player.position-activeAnchor.body.position;
+        Vector2 radial=player.position-anchorWorldPosition;
         if(radial.sqrMagnitude<.0001f) return;
         radial.Normalize();
 
@@ -403,7 +476,11 @@ public sealed class TwinSwingGame : MonoBehaviour
         float recovery=1-Mathf.Clamp01(speed/Mathf.Max(.1f,lowMomentumSpeed));
         float impulse=Mathf.Lerp(minimumPumpImpulse,maximumPumpImpulse,pumpCharge)*
             Mathf.Lerp(.25f,1f,recovery);
-        player.AddForce(tangent*(impulse*player.mass),ForceMode2D.Impulse);
+        float stretch=Mathf.Max(0,Vector2.Distance(player.position,anchorWorldPosition)-swingJoint.distance);
+        float recoil=Mathf.Min(Mathf.Max(0,maximumReleaseRecoil),stretch*2*Mathf.PI*Mathf.Max(.3f,ropeFrequency)*Mathf.Max(0,releaseRecoilStrength))*pumpCharge;
+        // Preserve existing velocity, add the charged tangent kick, and carry stored spring
+        // energy into the launch before the joint is removed on this same key-up.
+        player.linearVelocity=Vector2.ClampMagnitude(player.linearVelocity+tangent*impulse-radial*recoil,Mathf.Max(1,maximumPlayerSpeed));
         flash=Mathf.Max(flash,.045f+pumpCharge*.055f);
         shake=Mathf.Max(shake,.02f+pumpCharge*.025f);
         attachPulse=.25f;
@@ -411,14 +488,21 @@ public sealed class TwinSwingGame : MonoBehaviour
         pumpCharge=0;
     }
 
+    private float RecycleBehindX()
+    {
+        float halfWidth=sharedCamera.orthographicSize*sharedCamera.aspect;
+        // Recycle only after an object is both offscreen and out of reach behind the player.
+        return Mathf.Min(sharedCamera.transform.position.x-halfWidth-2,player.position.x-attachRange-2);
+    }
+
     private void RecycleAnchors()
     {
         foreach(var anchor in anchors)
         {
             if(anchor==activeAnchor) continue;
-            if(anchor.body.position.x<-8)
+            if(anchor.body.position.x<RecycleBehindX())
             {
-                float furthest=0;
+                float furthest=player.position.x+sharedCamera.orthographicSize*sharedCamera.aspect;
                 foreach(var other in anchors) furthest=Mathf.Max(furthest,other.body.position.x);
                 PlaceAnchor(anchor,furthest+anchorSpacing);
             }
@@ -429,9 +513,9 @@ public sealed class TwinSwingGame : MonoBehaviour
     {
         foreach(var gem in gems)
         {
-            if(gem.transform.position.x<-8)
+            if(gem.transform.position.x<RecycleBehindX())
             {
-                float furthest=0;
+                float furthest=player.position.x+sharedCamera.orthographicSize*sharedCamera.aspect;
                 foreach(var other in gems) furthest=Mathf.Max(furthest,other.transform.position.x);
                 PlaceGem(gem,furthest+gemSpacing);
             }
@@ -496,15 +580,7 @@ public sealed class TwinSwingGame : MonoBehaviour
     private void LateUpdate()
     {
         if(!built) return;
-        if(Attached && activeAnchor!=null)
-        {
-            Vector3 a=player.transform.position,b=activeAnchor.body.transform.position;
-            for(int n=0;n<rope.positionCount;n++)
-            {
-                float t=n/(float)(rope.positionCount-1);
-                rope.SetPosition(n,Vector3.Lerp(a,b,t));
-            }
-        }
+        if(Attached && activeAnchor!=null) UpdateRopeVisual(Time.deltaTime);
         float distance=attachRange;
         SwingAnchor highlight=Attached?activeAnchor:FindNearestAnchor(out distance);
         if(Attached && activeAnchor!=null)
@@ -524,6 +600,40 @@ public sealed class TwinSwingGame : MonoBehaviour
             new Vector3(Mathf.Sin(Time.unscaledTime*67),Mathf.Cos(Time.unscaledTime*73),0)*shake;
     }
 
+    private void ResetRopeVisual()
+    {
+        int count=Mathf.Clamp(ropeSegments,4,64)+1;
+        ropePositions=new Vector3[count];
+        rope.useWorldSpace=true;rope.positionCount=count;
+        for(int i=0;i<count;i++)
+            ropePositions[i]=Vector3.Lerp(player.transform.position,anchorWorldPosition,i/(float)(count-1));
+        rope.SetPositions(ropePositions);
+    }
+
+    private void UpdateRopeVisual(float dt)
+    {
+        if(ropePositions==null || ropePositions.Length!=Mathf.Clamp(ropeSegments,4,64)+1) ResetRopeVisual();
+        Vector3 start=player.transform.position,end=anchorWorldPosition;
+        int last=ropePositions.Length-1;
+        if(dt<=0)
+        {
+            ropePositions[0]=start;ropePositions[last]=end;rope.SetPositions(ropePositions);return;
+        }
+        float distance=Vector3.Distance(start,end);
+        float rest=swingJoint.distance;
+        float slack=Mathf.Max(0,rest-distance)+Mathf.Clamp(ropeVisualSlack,0,.2f)*rest;
+        float sag=Mathf.Min(Mathf.Min(.25f,distance*.12f),slack*.35f*Mathf.Clamp(ropeVisualGravity*.25f,0,2));
+        // A bounded curve, never an independently simulated rope. It cannot whip away,
+        // accumulate energy, or lag behind the two real spring endpoints.
+        for(int i=1;i<last;i++)
+        {
+            float t=i/(float)last;
+            float envelope=Mathf.Sin(Mathf.PI*t);
+            ropePositions[i]=Vector3.Lerp(start,end,t)+Vector3.down*(sag*envelope);
+        }
+        ropePositions[0]=start;ropePositions[last]=end;rope.SetPositions(ropePositions);
+    }
+
     private SwingAnchor FindNearestAnchor(out float distance)
     {
         SwingAnchor best=null;
@@ -539,7 +649,7 @@ public sealed class TwinSwingGame : MonoBehaviour
     private Vector3 CameraTarget()
     {
         if(Attached && activeAnchor!=null)
-            return new Vector3(activeAnchor.body.position.x,0,-10);
+            return new Vector3(anchorWorldPosition.x,0,-10);
         float halfWidth=sharedCamera.orthographicSize*sharedCamera.aspect;
         float lead=Mathf.Clamp(halfWidth-cameraLeadInset,0,cameraMaximumLead);
         return new Vector3(player.position.x+lead,0,-10);

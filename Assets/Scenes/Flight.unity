@@ -2514,11 +2514,22 @@ MonoBehaviour:
   minRopeLength: 0.75
   maxRopeLength: 6.8
   swingBoost: 0.7
+  maximumPlayerSpeed: 12
   chargeHoldDelay: 0.16
   pumpChargeTime: 0.75
   lowMomentumSpeed: 3
-  minimumPumpImpulse: 1.2
-  maximumPumpImpulse: 4.8
+  minimumPumpImpulse: 0.4
+  maximumPumpImpulse: 2.8
+  ropeFrequency: 2.2
+  ropeDamping: 0.3
+  holdStretchAcceleration: 20
+  maximumHoldStretch: 0.1
+  releaseRecoilStrength: 0.25
+  maximumReleaseRecoil: 1.2
+  ropeSegments: 24
+  ropeVisualSlack: 0.005
+  ropeVisualGravity: 4
+  ropeVisualDamping: 0.97
   courseSeed: 4173
   anchorHeightRange: {x: -1.2, y: 3.8}
   gemHeightRange: {x: -2.8, y: 2.8}
@@ -2530,7 +2541,7 @@ MonoBehaviour:
   cameraMaximumLead: 2.8
   cameraLeadInset: 2.2
   anchorHighlightScale: 1.35
-  chargeVisualGrowth: 0.5
+  chargeVisualGrowth: 0
   actionKey: 32
   hud: {fileID: 733745540}
   useSceneObjects: 1
