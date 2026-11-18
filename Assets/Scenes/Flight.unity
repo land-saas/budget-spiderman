@@ -638,7 +638,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4035738497420582231, guid: 2e6c58ab716a6454592e3e15ccc5eac8, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 5.4
+      value: 6.6
       objectReference: {fileID: 0}
     - target: {fileID: 4035738497420582231, guid: 2e6c58ab716a6454592e3e15ccc5eac8, type: 3}
       propertyPath: m_LocalPosition.z
@@ -1016,7 +1016,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4035738497420582231, guid: 2e6c58ab716a6454592e3e15ccc5eac8, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -5.4
+      value: -6.6
       objectReference: {fileID: 0}
     - target: {fileID: 4035738497420582231, guid: 2e6c58ab716a6454592e3e15ccc5eac8, type: 3}
       propertyPath: m_LocalPosition.z
@@ -1297,7 +1297,7 @@ Camera:
   far clip plane: 1000
   field of view: 60
   orthographic: 1
-  orthographic size: 4.9
+  orthographic size: 6.6
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
@@ -2508,7 +2508,7 @@ MonoBehaviour:
   gravity: 9.4
   attachRange: 7
   scrollSpeed: 2.1
-  corridorHalfHeight: 4.9
+  corridorHalfHeight: 6.1
   anchorSpacing: 6.2
   gemSpacing: 4.6
   minRopeLength: 0.75
@@ -2531,8 +2531,8 @@ MonoBehaviour:
   ropeVisualGravity: 4
   ropeVisualDamping: 0.97
   courseSeed: 4173
-  anchorHeightRange: {x: -1.2, y: 3.8}
-  gemHeightRange: {x: -2.8, y: 2.8}
+  anchorHeightRange: {x: -1.6, y: 4.6}
+  gemHeightRange: {x: -4, y: 4}
   openingSlowDuration: 5
   openingScrollMultiplier: 0.5
   startCountdownDuration: 1.5

@@ -371,7 +371,7 @@ public static class TwinlineAuthoring
         cameraObject.tag = "MainCamera";
         game.sharedCamera = cameraObject.AddComponent<Camera>();
         game.sharedCamera.orthographic = true;
-        game.sharedCamera.orthographicSize = 4.9f;
+        game.sharedCamera.orthographicSize = game.corridorHalfHeight + .5f;
         game.sharedCamera.clearFlags = CameraClearFlags.SolidColor;
         game.sharedCamera.backgroundColor = Color.black;
         game.sharedCamera.rect = new Rect(0f, 0f, 1f, 1f);
