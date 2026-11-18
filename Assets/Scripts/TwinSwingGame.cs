@@ -31,6 +31,16 @@ public sealed class TwinSwingGame : MonoBehaviour
     /// <summary>Session totals, kept across retries, so tutorial prompts fade once learned.</summary>
     public int TotalGrabs { get; private set; }
     public int TotalChargedLaunches { get; private set; }
+    // Read-only hooks for presentation layers such as TwinlineAtmosphere.
+    public IReadOnlyList<SwingAnchor> Anchors => anchors;
+    public IReadOnlyList<SwingGemPickup> Gems => gems;
+    public SwingAnchor ActiveAnchor => activeAnchor;
+    public SwingAnchor HighlightedAnchor { get; private set; }
+    public event Action<Vector3> GemCollected;
+    public event Action<Vector3,Vector2,bool> Launched;
+    public event Action<Vector3> Grabbed;
+    public event Action<Vector3> Crashed;
+    public event Action RunReset;
     public Rigidbody2D player;
     public Camera sharedCamera;
     public LineRenderer rope;
@@ -90,6 +100,12 @@ public sealed class TwinSwingGame : MonoBehaviour
     [Min(0)] public float gemArcStart=.2f;
     [Tooltip("Seconds of flight between gems on the same arc.")]
     [Min(.05f)] public float gemArcSpacing=.15f;
+    [Tooltip("When you grab an anchor, its gems glide once onto its perfect path for your actual rope length. This is how long that glide takes.")]
+    [Min(.05f)] public float gemGlideTime=.5f;
+    [Tooltip("After a perfect launch, gems within this distance drift gently toward you, forgiving a near miss.")]
+    [Min(0)] public float gemMagnetRadius=.75f;
+    [Min(0)] public float gemMagnetSpeed=5f;
+    [Min(0)] public float gemMagnetTime=.9f;
     [Header("Swing guides")]
     public bool showLaunchArc=true;
     [Min(.2f)] public float launchArcSeconds=1.1f;
@@ -97,6 +113,8 @@ public sealed class TwinSwingGame : MonoBehaviour
     public bool showBoundaryLines=true;
     [Tooltip("Adds the on-screen how-to-play panel, prompts, gem counter and streak popups.")]
     public bool showGuide=true;
+    [Tooltip("Adds the dusk sky, parallax hills, glows, player trail and particle bursts.")]
+    public bool showAtmosphere=true;
     [Header("Rope appearance")]
     [Range(4,64)] public int ropeSegments=24;
     [Range(0f,.2f)] public float ropeVisualSlack=.005f;
@@ -188,6 +206,11 @@ public sealed class TwinSwingGame : MonoBehaviour
     private readonly Vector3[] arcPoints=new Vector3[48];
     private readonly Vector3[] ringPoints=new Vector3[41];
     private int runSeed;
+    // Per-anchor gem arc design: release angle (radians from straight down) and charge.
+    private float[] gemArcTheta=new float[0],gemArcDesignCharge=new float[0];
+    private Vector3[] gemGlideFrom=new Vector3[0],gemGlideTo=new Vector3[0];
+    private float[] gemGlideAge=new float[0];
+    private float magnetTimer;
 
     private void Awake()
     {
@@ -195,6 +218,8 @@ public sealed class TwinSwingGame : MonoBehaviour
         BuildGuides();
         if(showGuide && Application.isPlaying && GetComponent<TwinlineGuide>()==null)
             gameObject.AddComponent<TwinlineGuide>().game=this;
+        if(showAtmosphere && Application.isPlaying && GetComponent<TwinlineAtmosphere>()==null)
+            gameObject.AddComponent<TwinlineAtmosphere>().game=this;
         ResetRun();
     }
 
@@ -297,7 +322,8 @@ public sealed class TwinSwingGame : MonoBehaviour
         Best=PlayerPrefs.GetInt("TwinSwingBest",0);
         rng=new System.Random(runSeed!=0?runSeed:courseSeed);
         countdown=crashAge=flash=shake=attachPulse=spaceHoldAge=pumpCharge=0;
-        Streak=0;PerfectPopup=0;LastLaunchPerfect=false;
+        Streak=0;PerfectPopup=0;LastLaunchPerfect=false;magnetTimer=0;
+        for(int i=0;i<gemGlideAge.Length;i++) gemGlideAge[i]=-1;
         spaceHolding=false;
         ReleaseSwing();
         player.simulated=true;
@@ -314,6 +340,7 @@ public sealed class TwinSwingGame : MonoBehaviour
         for(int i=0;i<anchors.Count;i++) PlaceGemsForAnchor(i);
         for(int i=0;i<boundaries.Count;i++) boundaries[i].transform.position=initialBoundaryPositions[i];
         Physics2D.SyncTransforms();
+        RunReset?.Invoke();
     }
 
     public void StartRun(bool skipCountdown=false)
@@ -436,6 +463,8 @@ public sealed class TwinSwingGame : MonoBehaviour
         ResetRopeVisual();
         attachPulse=.35f;
         TotalGrabs++;
+        RetargetGemsOnGrab();
+        Grabbed?.Invoke(anchorWorldPosition);
         Play(attachSound,attachVolume);
     }
 
@@ -466,6 +495,7 @@ public sealed class TwinSwingGame : MonoBehaviour
         gem.pickupCollider.enabled=false;
         Score+=GemValue;
         flash=.08f;
+        GemCollected?.Invoke(gem.transform.position);
         Play(gemSound,gemVolume);
     }
 
@@ -474,6 +504,7 @@ public sealed class TwinSwingGame : MonoBehaviour
         if(State!=Mode.Flying) return;
         State=Mode.Crashed;crashAge=0;
         LastCrashReason=reason;LastCrashWasHigh=player.position.y>0;
+        Crashed?.Invoke(player.position);
         Streak=0;
         spaceHolding=false;spaceHoldAge=pumpCharge=0;
         ReleaseSwing();
@@ -523,6 +554,7 @@ public sealed class TwinSwingGame : MonoBehaviour
             Vector3 position=boundary.transform.position;position.x=player.position.x;
             boundary.transform.position=position;
         }
+        UpdateGemMotion(dt);
         RecycleAnchors();
 
     }
@@ -583,9 +615,10 @@ public sealed class TwinSwingGame : MonoBehaviour
         Vector2 velocity=PredictLaunchVelocity();
         player.linearVelocity=velocity;
         LastLaunchPerfect=IsPerfect(velocity,charge);
-        if(LastLaunchPerfect) { Streak++;PerfectPopup=1f;flash=Mathf.Max(flash,.12f); }
+        if(LastLaunchPerfect) { Streak++;PerfectPopup=1f;flash=Mathf.Max(flash,.12f);magnetTimer=gemMagnetTime; }
         else Streak=0;
         if(charge>0) TotalChargedLaunches++;
+        Launched?.Invoke(player.position,velocity,LastLaunchPerfect);
         flash=Mathf.Max(flash,.045f+charge*.055f);
         shake=Mathf.Max(shake,.02f+charge*.025f);
         attachPulse=.25f;
@@ -637,11 +670,14 @@ public sealed class TwinSwingGame : MonoBehaviour
     /// </summary>
     private void PlaceGemsForAnchor(int anchorIndex)
     {
-        int per=Mathf.Max(1,gemsPerAnchor);
-        Vector2 anchor=anchors[anchorIndex].body.position;
+        if(gemArcTheta.Length!=anchors.Count)
+        {
+            gemArcTheta=new float[anchors.Count];
+            gemArcDesignCharge=new float[anchors.Count];
+        }
         float Pick(Vector2 range)=>Mathf.Lerp(range.x,range.y,(float)rng.NextDouble());
         float ropeLength=Mathf.Clamp(Pick(gemArcRopeLength),minRopeLength,maxRopeLength);
-        float charge=Mathf.Clamp(Pick(gemArcCharge),perfectMinimumCharge,1f);
+        gemArcDesignCharge[anchorIndex]=Mathf.Clamp(Pick(gemArcCharge),perfectMinimumCharge,1f);
         float lowAngle=Mathf.Min(perfectLaunchAngles.x+10,perfectLaunchAngles.y);
         float highAngle=Mathf.Max(perfectLaunchAngles.y-10,lowAngle);
         float targetAngle=Mathf.Lerp(lowAngle,highAngle,(float)rng.NextDouble());
@@ -655,25 +691,99 @@ public sealed class TwinSwingGame : MonoBehaviour
             float error=Mathf.Abs(angle-targetAngle);
             if(error<bestError) { bestError=error;bestTheta=r; }
         }
-        Vector2 release=anchor+new Vector2(Mathf.Sin(bestTheta),-Mathf.Cos(bestTheta))*ropeLength;
-        Vector2 direction=new Vector2(Mathf.Cos(bestTheta),Mathf.Sin(bestTheta)+launchLift).normalized;
-        Vector2 velocity=direction*Mathf.Lerp(minimumLaunchSpeed,maximumLaunchSpeed,charge);
-        Vector2 g=new Vector2(0,-gravity);
-        float ceiling=FloorCeilingInnerEdge(true)-.5f,floor=FloorCeilingInnerEdge(false)+.5f;
+        gemArcTheta[anchorIndex]=bestTheta;
 
+        int per=Mathf.Max(1,gemsPerAnchor);
         for(int j=0;j<per;j++)
         {
             int k=anchorIndex*per+j;
             if(k>=gems.Count) break;
             var gem=gems[k];
-            float t=gemArcStart+j*gemArcSpacing;
-            Vector2 p=release+velocity*t+.5f*g*t*t;
-            p.y=Mathf.Clamp(p.y,floor,ceiling);
             gem.collected=false;
             gem.pickupCollider.enabled=true;
             gem.visual.gameObject.SetActive(true);
-            gem.transform.position=new Vector3(p.x,p.y,0);
+            gem.transform.position=DesignedGemPosition(anchorIndex,j,ropeLength,0);
+            if(k<gemGlideAge.Length) gemGlideAge[k]=-1;
             gem.index=nextGem++;
+        }
+    }
+
+    /// <summary>
+    /// Where gem j of an anchor sits on that anchor's designed perfect arc, for a given
+    /// rope length and the swing speed you would have at the release point.
+    /// </summary>
+    private Vector3 DesignedGemPosition(int anchorIndex,int j,float ropeLength,float swingSpeed)
+    {
+        float theta=gemArcTheta[anchorIndex];
+        Vector2 anchor=anchors[anchorIndex].body.position;
+        Vector2 release=anchor+new Vector2(Mathf.Sin(theta),-Mathf.Cos(theta))*ropeLength;
+        Vector2 direction=new Vector2(Mathf.Cos(theta),Mathf.Sin(theta)+launchLift).normalized;
+        float speed=Mathf.Max(swingSpeed,Mathf.Lerp(minimumLaunchSpeed,maximumLaunchSpeed,gemArcDesignCharge[anchorIndex]));
+        speed=Mathf.Min(speed,maximumLaunchSpeed,maximumPlayerSpeed);
+        return ArcPoint(release,direction*speed,gemArcStart+j*gemArcSpacing);
+    }
+
+    private Vector3 ArcPoint(Vector2 start,Vector2 velocity,float t)
+    {
+        Vector2 p=start+velocity*t+.5f*new Vector2(0,-gravity)*t*t;
+        p.y=Mathf.Clamp(p.y,FloorCeilingInnerEdge(false)+.5f,FloorCeilingInnerEdge(true)-.5f);
+        return new Vector3(p.x,p.y,0);
+    }
+
+    /// <summary>
+    /// On grab, the rope length is finally known, so the anchor's gems glide once (eased,
+    /// about half a second) onto its designed perfect path for that rope. After that they
+    /// stay put: hitting them is about matching the timing and charge, not chasing them.
+    /// </summary>
+    private void RetargetGemsOnGrab()
+    {
+        if(gemGlideAge.Length!=gems.Count)
+        {
+            gemGlideFrom=new Vector3[gems.Count];gemGlideTo=new Vector3[gems.Count];
+            gemGlideAge=new float[gems.Count];
+            for(int i=0;i<gemGlideAge.Length;i++) gemGlideAge[i]=-1;
+        }
+        int anchorIndex=anchors.IndexOf(activeAnchor);
+        if(anchorIndex<0 || anchorIndex>=gemArcTheta.Length) return;
+        float ropeLength=swingJoint.distance;
+        // Speed you'd have at the designed release point, from energy conservation.
+        float theta=gemArcTheta[anchorIndex];
+        float releaseHeight=anchorWorldPosition.y-Mathf.Cos(theta)*ropeLength;
+        float speedSquared=player.linearVelocity.sqrMagnitude+2*gravity*(player.position.y-releaseHeight);
+        float swingSpeed=Mathf.Min(Mathf.Sqrt(Mathf.Max(0,speedSquared)),maximumSwingSpeed);
+        int per=Mathf.Max(1,gemsPerAnchor);
+        for(int j=0;j<per;j++)
+        {
+            int k=anchorIndex*per+j;
+            if(k>=gems.Count || gems[k].collected) continue;
+            gemGlideFrom[k]=gems[k].transform.position;
+            gemGlideTo[k]=DesignedGemPosition(anchorIndex,j,ropeLength,swingSpeed);
+            gemGlideAge[k]=0;
+        }
+    }
+
+    private void UpdateGemMotion(float dt)
+    {
+        for(int k=0;k<gemGlideAge.Length && k<gems.Count;k++)
+        {
+            if(gemGlideAge[k]<0) continue;
+            gemGlideAge[k]+=dt;
+            float x=Mathf.Clamp01(gemGlideAge[k]/gemGlideTime);
+            float ease=x*x*x*(x*(6*x-15)+10); // Smootherstep: no jolt at either end.
+            gems[k].transform.position=Vector3.LerpUnclamped(gemGlideFrom[k],gemGlideTo[k],ease);
+            if(x>=1) gemGlideAge[k]=-1;
+        }
+        if(magnetTimer<=0) return;
+        magnetTimer-=dt;
+        Vector3 p=player.position;
+        foreach(var gem in gems)
+        {
+            if(gem.collected) continue;
+            Vector3 toPlayer=p-gem.transform.position;toPlayer.z=0;
+            float d=toPlayer.magnitude;
+            if(d>gemMagnetRadius || d<.001f) continue;
+            float pull=gemMagnetSpeed*(1-d/gemMagnetRadius)*dt;
+            gem.transform.position+=toPlayer/d*Mathf.Min(d,pull);
         }
     }
 
@@ -741,6 +851,7 @@ public sealed class TwinSwingGame : MonoBehaviour
         cameraCenter=Vector3.Lerp(cameraCenter,CameraTarget(),1-Mathf.Exp(-cameraFollowSpeed*Time.unscaledDeltaTime));
         cameraCenter=KeepPlayerOnScreen(cameraCenter);
         AnchorInReach=!Attached && highlight!=null && distance<=attachRange;
+        HighlightedAnchor=AnchorInReach?highlight:null;
         UpdateGuides();
         sharedCamera.transform.position=cameraCenter+
             new Vector3(Mathf.Sin(Time.unscaledTime*67),Mathf.Cos(Time.unscaledTime*73),0)*shake;
@@ -821,7 +932,7 @@ public sealed class TwinSwingGame : MonoBehaviour
         guideInk=new Material(shader);resources.Add(guideInk);
         launchArc=GuideLine("Launch arc",arcPoints.Length,.05f,10);
         chargeRing=GuideLine("Charge ring",ringPoints.Length,.06f,13);
-        for(int i=0;i<2;i++) boundaryLines.Add(GuideLine(i==0?"Ceiling line":"Floor line",2,.07f,2));
+        for(int i=0;i<2;i++) boundaryLines.Add(GuideLine(i==0?"Ceiling line":"Floor line",2,.045f,2));
     }
 
     private LineRenderer GuideLine(string name,int count,float width,int order)
@@ -899,7 +1010,7 @@ public sealed class TwinSwingGame : MonoBehaviour
     }
 
     /// <summary>World height where the ceiling (or floor) collider starts.</summary>
-    private float FloorCeilingInnerEdge(bool ceiling)
+    public float FloorCeilingInnerEdge(bool ceiling)
     {
         float edge=ceiling?float.PositiveInfinity:float.NegativeInfinity;
         foreach(var b in boundaries)
