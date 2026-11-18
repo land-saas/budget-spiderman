@@ -22,3 +22,6 @@ UserSettings/
 *.zip
 .env
 .env.*
+
+*.log
+Verification/

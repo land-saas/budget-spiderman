@@ -1,74 +1,33 @@
-## New woodland prototype
+# Woodland: editable 2.5D rope prototype
 
-The editable 2.5D forest, billboard cabin and rope-shooting prototype is in [Woodland](Woodland/README.md). Open that folder separately in Unity Hub (6000.6.9f1). This public edition uses original replacement character/vegetation art; the existing 2D project below is unchanged.
+Open **this repository root folder** as a project in Unity Hub with **Unity 6000.6.9f1**. Open `Assets/ReferenceWorld25D/WoodlandReference.unity` and press Play. Do not import it into the original 2D project: this edition uses URP, the Input System and 3D CharacterController physics. This replaces the earlier root 2D prototype; that version remains available in Git history.
 
-# Twinline
+## Controls
+- WASD / arrows: walk; Shift: run; Space: jump.
+- Hold left mouse to automatically attach to the nearest sky anchor and build swing momentum; release to launch with your current velocity. WASD / arrows pump the swing and steer in flight. Click another ring to chain swings. Space performs a ground jump plus one air jump. R resets. The camera follows your altitude.
+- R: reset; N: toggle day/night.
 
-Swing on a rope, collect gems, and let go at the right moment.
+The grapple is a CharacterController adaptation, not the original game's Rigidbody2D joint simulation.
 
-This is the existing one-button Twinline prototype, organized as an editable Unity project. Its player, anchors, gems, rope, camera, and boundaries are saved in the scene. Reusable prefabs, imported sprites, materials, and sound files live in `Assets`.
+## Editing
+Scene objects are authored and editable, not recreated on Play. Terrain, dirt paths, disabled boundaries, cabin panels, trees, lighting, player/camera, backdrop and rope anchors have separate numbered hierarchy groups. Move the cabin facade parent as one camera-facing unit; its collider is separate. Change movement and grapple values on Explorer. The authored central region extends into procedural terrain during Play. The backdrop is decorative, not the walkable map.
 
-The game keeps its original red, yellow, and orange geometric style, with a taut, lightly elastic rope and fixed-world anchors.
+Older disabled artwork groups are retained within the scene for recovery; they do not run. Historical migration scripts and backup scenes are deliberately excluded from this edition to avoid automatic modifications on import.
 
-![Twinline shared-camera gameplay](docs/images/ready.png)
+## Public-safe artwork
+This is a public-safe variant, not an identical export of the private local scene. Paid character sprites and screenshot-derived trees/grass/props were replaced with original procedural pixel placeholders. All nine 14 × 16 character frames share the same style, dimensions and pivot. Shooting uses the native side-facing frame and restores the walking/idle frames on release. It is not a dedicated arm-extension animation. See `PUBLIC-ART.txt`. The original local scene and licensed assets are unchanged.
 
-## Open and play
+## Validation
+`WoodlandValidation.Validate` checks scene load, missing scripts, nine matching character frames, firing geometry, left/right fire and release, out-of-range rejection and ground collision. It writes `Verification/result.txt` and a render when a graphics device is available. Run via Unity `-batchmode -projectPath <Woodland> -executeMethod WoodlandValidation.Validate -quit`.
 
-1. In Unity Hub, choose **Add project from disk** and select this folder, which contains `Assets`, `Packages`, and `ProjectSettings`.
-2. Open with **Unity 6000.6.2f1**.
-3. Open `Assets/Scenes/Flight.unity`.
-4. Press **Play**, then **Space** to begin.
+Automated checks are not a full manual keyboard/mouse playtest or a platform player build. No multiplayer, save system or complete game progression is included.
 
-| Input | Action |
-| --- | --- |
-| **Space** on the start or crash screen | Begin or retry |
-| A first tap of **Space** near an anchor | Attach and stay connected |
-| While attached, press/hold **Space**, then release | Detach and launch with your momentum and charge |
-| Hold longer, then release | Store more spring tension and charge for a stronger launch |
+## Momentum upgrade
+11 stationary golden sky rings form an editable route in `08 Sky anchors - editable swing route`. Reposition each object in the scene. On Explorer, tune reel speed, spring strength, radial damping, gravity, maximum air speed, and steering. Release preserves velocity, with no canned launch teleport or reset. `WoodlandMomentumSetup.Validate` tests moving attachment, release velocity continuity, ballistic travel, midair reattachment, repeated release and landing.
 
-Press Space to begin. During the run, a short first tap attaches and stays connected. While attached, press and hold Space to charge, then release to detach and launch. A second quick tap detaches without charging. A longer hold builds launch momentum with a small, damped stretch. The player keeps its normal size; the rope has no decorative waves or loose simulated strand. Holding the initial attaching press also charges; releasing that charged hold launches. You can hold through the opening countdown to catch the first anchor. Losing app focus safely detaches without launching. All anchors and gems stay fixed in world space. The player and camera travel through them; only objects far behind the player and offscreen recycle ahead.
+## Extending traversal
+Left mouse automatically locks onto the **nearest sky anchor to the player** within 30 units; hold to reel at 9 units/s and build physical momentum, release to retain that velocity. WASD/arrows steer/pump. Space performs a ground jump, then one air jump; the air-jump allowance resets on landing, not on attaching/releasing. R resets. Invisible boundary colliders are disabled.
 
-Collect orange gems and avoid the floor, ceiling, and obstacles. The course remains stationary and recycles behind the camera as you travel. The nearest reachable anchor grows to show the attachment target.
+`09 Procedural extension - runtime chunks` streams a deterministic 5×5 neighborhood of 32-unit terrain chunks around the player, with golden anchors and decorative non-colliding pine silhouettes. Old chunks unload; the authored central town remains editable. Change the seed, materials, size and radius on that object. Generated chunks appear during Play and are not saved scene content. There is no floating-origin system, so extreme travel distances eventually encounter floating-point precision limits.
 
-## Edit the starting scene directly
-
-Open **Assets/Scenes/Flight.unity**, not a `.cs` script. The Hierarchy exposes **Player**, **Main Camera**, **Course**, **Interface (Canvas)**, **Audio**, and **Game Controller** as ordinary scene objects. Use **Twinline → Show Starting Scene For Editing** to frame the starting area in 2D.
-
-See [Start editing the scene](docs/EditableProject.md) for changing visuals, native UI, audio, and gameplay settings through the Inspector.
-
-## Edit the game
-
-Open `Flight.unity` before pressing Play to inspect the saved scene objects. Select the object with `TwinSwingGame` to tune gravity, attachment range, rope limits, anchor spacing, gem spacing, and pump strength in the Inspector.
-
-With **Use Authored Course** enabled, moving the initial anchor and gem instances changes the opening layout. Retry restores those authored positions. The later endless course uses the controller's spacing settings and seeded placement.
-
-Under **Elastic rope**, tune **Rope Frequency** (lower is softer), **Rope Damping** (lower bounces longer), **Hold Stretch Acceleration**, and **Maximum Hold Stretch**, **Release Recoil Strength** and **Maximum Release Recoil**. Under **Rope appearance**, tune segment count and slack. The visual rope is bounded between its two endpoints, and catching never multiplies player speed. Rope length limits set the resting length; physical stretch can exceed it. Existing pump strength and charge-time settings still apply.
-
-Open `Assets/Scenes/AssetLibrary.unity` to browse the asset gallery. See [the asset library guide](docs/AssetLibrary.md) for prefab editing, sprite replacement, and sound customization.
-
-Normal project opening does not rebuild the authored scene. **Twinline → Build Editable Project** recreates the supplied scene and assets; save a copy of any custom layout before using it.
-
-## Project contents
-
-| Location | Contents |
-| --- | --- |
-| `Assets/Scenes` | Playable scene and asset gallery |
-| `Assets/Prefabs/Gameplay` | Reusable player, anchor, gem, rope, and boundary objects |
-| `Assets/Prefabs/UI` | Editable native Canvas interface |
-| `Assets/Art/Sprites` | Imported PNG sprites for game objects and optional visual variants |
-| `Assets/Art/Materials` | Saved rendering materials |
-| `Assets/Audio/SFX` | Imported attachment, release, pickup, and crash cues |
-| `Assets/Scripts` | Runtime movement, collision, collection, and course logic |
-| `Assets/Editor` | Explicit authoring tools and validation commands |
-
-## Prototype history
-
-The active game is **single-player rope swinging and gem collection**. The earlier cooperative flight scripts remain in the project for reference. The **Twinline → Validate Flight Mechanics** command checks that older mode; it is separate from swing-game verification.
-
-- [Original co-op flight mechanics](docs/Mechanics.md)
-- [Design research and playtest questions](Design-notes.md)
-- [Previously published prototype](https://github.com/land-saas/twinline/releases)
-
-## Rope verification
-
-Run **Twinline → Validation → Run All Rope Checks** for the complete saved-project, physics and Play Mode suite. Use **Validate Elastic Rope** for real 2D spring-solver checks of bounce, a fixed pivot, first-press charging, detach/launch distance, focus loss, retry and repeated-catch stability. **Run Swing Play Mode Checks** tests the saved scene in actual Play mode, including rendered rope endpoints, input, collection, collision and retry. Reports and captured frames are written to `Verification/`. These checks do not rebuild or save the authored scene.
+`WoodlandTravelSetup.Validate` checks jump limits, fast reel, nearest-anchor selection, removed air boundaries, bounded chunk counts and ground/anchors beyond the original map. These are automated simulation checks, not a manual full-game playtest.
