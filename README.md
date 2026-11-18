@@ -1,6 +1,8 @@
 # Woodland: editable 2.5D rope prototype
 
-Open **this repository root folder** as a project in Unity Hub with **Unity 6000.6.9f1**. Open `Assets/ReferenceWorld25D/WoodlandReference.unity` and press Play. Do not import it into the original 2D project: this edition uses URP, the Input System and 3D CharacterController physics. This replaces the earlier root 2D prototype; that version remains available in Git history.
+Open **this repository root folder** as a project in Unity Hub with **Unity 6000.6.9f1**. On first interactive import, the playable **WoodlandReference** scene opens automatically; press **Play**. If Unity is restoring an existing scene or you already have unsaved work, the helper deliberately leaves it alone. In that case, open `Assets/ReferenceWorld25D/WoodlandReference.unity` manually. It is also the enabled first build scene. Do not import it into the original 2D project: this edition uses URP, the Input System and 3D CharacterController physics. This replaces the earlier root 2D prototype; that version remains available in Git history.
+
+The automatic opener runs only once per local Library folder, never saves scene changes, and does not run in batch mode. Subsequent launches keep your own scene selection. Deleting Library resets that one-time check.
 
 ## Controls
 - WASD / arrows: walk; Shift: run; Space: jump.
