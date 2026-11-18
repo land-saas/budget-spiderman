@@ -1,0 +1,27 @@
+Public edition: source-paid character and screenshot-derived vegetation are NOT included.
+These 17 texture files are original procedural placeholder drawings, not edits of the paid files.
+Other forest textures/backdrop/cabin were generated for this project.
+Original editable local Bloom project is unchanged.
+
+Assets/ForestRoadtrip25D/Textures/Ground/screenshot_grass.png
+Assets/ForestRoadtrip25D/Textures/Human/player-00.png
+Assets/ForestRoadtrip25D/Textures/Human/player-01.png
+Assets/ForestRoadtrip25D/Textures/Human/player-02.png
+Assets/ForestRoadtrip25D/Textures/Human/player-03.png
+Assets/ForestRoadtrip25D/Textures/Human/player-04.png
+Assets/ForestRoadtrip25D/Textures/Human/player-05.png
+Assets/ForestRoadtrip25D/Textures/Human/player-06.png
+Assets/ForestRoadtrip25D/Textures/Human/player-07.png
+Assets/ForestRoadtrip25D/Textures/Human/player-08.png
+Assets/ForestRoadtrip25D/Textures/ScreenshotProps/fallen_wood.png
+Assets/ForestRoadtrip25D/Textures/ScreenshotProps/fern_a.png
+Assets/ForestRoadtrip25D/Textures/ScreenshotProps/grass_a.png
+Assets/ForestRoadtrip25D/Textures/ScreenshotProps/grass_b.png
+Assets/ForestRoadtrip25D/Textures/ScreenshotProps/stump_small.png
+Assets/ForestRoadtrip25D/Textures/ScreenshotTrees/tree_cool.png
+Assets/ReferenceWorld25D/player_shooting_right.png (unused archive replaced as well)
+
+Provenance of retained artwork:
+- PixelForestBackdrop.png: generated for this woodland scene.
+- CabinFront.png: render of original procedural cabin geometry, as recorded in the local CabinBillboardMigration source.
+- Props pine_tree, grass_dense, boulder, supply_crate and Ground dirt_a: generated atlas slices documented in ForestRoadtrip25D/Documentation/ASSET.md in the source project; not the separately licensed Human or Screenshot assets.

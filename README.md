@@ -1,3 +1,7 @@
+## New woodland prototype
+
+The editable 2.5D forest, billboard cabin and rope-shooting prototype is in [Woodland](Woodland/README.md). Open that folder separately in Unity Hub (6000.6.9f1). This public edition uses original replacement character/vegetation art; the existing 2D project below is unchanged.
+
 # Twinline
 
 Swing on a rope, collect gems, and let go at the right moment.

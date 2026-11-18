@@ -1,0 +1,1 @@
+PASS: scene loads; no missing scripts; nine 14x16 sprites; matching firing geometry; both-direction fire/release; range rejection; ground raycast. Manual input playtest not performed.
